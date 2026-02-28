@@ -18,7 +18,7 @@ except ImportError:
     plt = None
 
 
-# ========= ADDED (pandas optional) =========
+# ========= ADDED  =========
 try:
     import pandas as pd
 except ImportError:
@@ -26,7 +26,7 @@ except ImportError:
 # ==========================================
 
 
-# ========= CHANGED (so it actually finds the uploaded file here) =========
+# ========= CHANGED  =========
 CSV_PATH = "/content/Titanic.csv"
 # =========================================================================
 
@@ -35,7 +35,7 @@ TEST_SIZE = 0.30
 EPOCHS = 400
 LEARNING_RATE = 0.10
 
-# ========= ADDED (to run Part A only) =========
+# ========= ADDED  =========
 RUN_BONUS = False   # keep Part B code in the file, but don't run it for Part A
 # ==============================================
 
@@ -82,7 +82,7 @@ def load_titanic_data(csv_path):
     return features, targets
 
 
-# ========= ADDED (pandas loader, keeps your csv loader untouched) =========
+# ========= ADDED  =========
 def load_titanic_data_pandas(csv_path):
     """
     Same output format as load_titanic_data(): (features, targets)
@@ -299,7 +299,7 @@ def plot_errors(error_history, title):
 def main():
     random.seed(RANDOM_SEED)
 
-    # ========= ADDED (prefer pandas if available, else fallback to your csv loader) =========
+    # ========= ADDED  =========
     if pd is not None:
         features, targets = load_titanic_data_pandas(CSV_PATH)
     else:
@@ -336,30 +336,27 @@ def main():
     )
     plot_errors(two_node_errors, "2-node network error")
 
-    # ========= ADDED (Part B code kept but only runs if RUN_BONUS=True) =========
-    if RUN_BONUS:
-        four_node_nn = NeuralNetwork(
-            input_size=len(x_train[0]),
-            hidden_layers=[2, 2],
-            learning_rate=LEARNING_RATE,
-            seed=RANDOM_SEED,
-        )
-        four_node_errors = four_node_nn.train(x_train, y_train, EPOCHS)
-        four_node_train_predictions = four_node_nn.predict(x_train)
-        four_node_test_predictions = four_node_nn.predict(x_test)
-        print_results(
-            "Part B Bonus: 2 hidden layers with 2 nodes each",
-            y_train,
-            four_node_train_predictions,
-            y_test,
-            four_node_test_predictions,
-        )
-        plot_errors(four_node_errors, "4-node network error")
-    # ==========================================================================
+    # ===================== Part B (Bonus) =====================
+    # 2 hidden layers, 2 nodes each (total 4 hidden nodes)
 
-    if plt is not None:
-        plt.show()
+    four_node_nn = NeuralNetwork(
+        input_size=len(x_train[0]),
+        hidden_layers=[2, 2],   # two hidden layers, 2 nodes each
+        learning_rate=LEARNING_RATE,
+        seed=RANDOM_SEED,
+    )
 
+    four_node_errors = four_node_nn.train(x_train, y_train, EPOCHS)
 
-if __name__ == "__main__":
-    main()
+    four_node_train_predictions = four_node_nn.predict(x_train)
+    four_node_test_predictions = four_node_nn.predict(x_test)
+
+    print("Part B: 2 hidden layers with 2 nodes each")
+    print("Training accuracy:", round(accuracy_score(y_train, four_node_train_predictions), 4))
+    print("Test accuracy:", round(accuracy_score(y_test, four_node_test_predictions), 4))
+    print("Training confusion matrix:", confusion_matrix(y_train, four_node_train_predictions))
+    print("Test confusion matrix:", confusion_matrix(y_test, four_node_test_predictions))
+    print()
+
+    plot_errors(four_node_errors, "4-node (2x2) network error")
+    # ==========================================================
