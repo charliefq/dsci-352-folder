@@ -23,12 +23,8 @@ from sklearn.metrics import accuracy_score, confusion_matrix
 # ---- Load Titanic CSV ----
 df = pd.read_csv("Titanic.csv")
 
-# Clean column names (just in case there are hidden spaces)
-df.columns = df.columns.str.strip()
-print("Columns:", df.columns.tolist())
-
 # ---- Target y (Survived) ----
-# Make Survived robust (works if it's 0/1 already OR strings like yes/no/true/false)
+# Make Survived robust
 y_raw = df["Survived"]
 if y_raw.dtype == object:
     y_raw = y_raw.astype(str).str.strip().str.lower().map({
@@ -47,7 +43,7 @@ y = y_raw.loc[valid_mask].astype(int).values  # shape (n,)
 use_cols = ["Class", "Sex", "Age"]
 Xdf = df[use_cols].copy()
 
-# Clean Age -> numeric for Titanic dataset (Adult/Child)
+# Clean Age
 Xdf["Age"] = Xdf["Age"].astype(str).str.strip().str.lower().map({
     "adult": 0,
     "child": 1,
@@ -56,14 +52,14 @@ Xdf["Age"] = Xdf["Age"].astype(str).str.strip().str.lower().map({
 })
 Xdf["Age"] = Xdf["Age"].fillna(Xdf["Age"].mode()[0]).astype(int)
 
-# Clean Sex -> 0/1
+# Clean Sex
 Xdf["Sex"] = Xdf["Sex"].astype(str).str.strip().str.lower().map({
     "male": 0, "m": 0,
     "female": 1, "f": 1
 })
 Xdf["Sex"] = Xdf["Sex"].fillna(Xdf["Sex"].mode()[0]).astype(int)
 
-# Clean Class -> numeric
+# Clean Class
 Xdf["Class"] = Xdf["Class"].astype(str).str.strip().str.lower().map({
     "1st": 1, "first": 1, "1": 1,
     "2nd": 2, "second": 2, "2": 2,
@@ -82,7 +78,7 @@ X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.30, random_state=2023, stratify=y
 )
 
-# ---- Scale features (helps sigmoid NN a lot) ----
+# ---- Scale features ----
 scaler = StandardScaler()
 X_train = scaler.fit_transform(X_train)
 X_test = scaler.transform(X_test)
