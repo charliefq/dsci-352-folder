@@ -7,256 +7,127 @@ Original file is located at
     https://colab.research.google.com/drive/1HsXkhBHoZVtYzKtg6U0mk8Vvp0unlHdN
 """
 
-# =========================
-# Prepare a dataset (Titanic)
-# =========================
-
-import os
-import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from sklearn.neural_network import MLPClassifier
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix, accuracy_score, ConfusionMatrixDisplay
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import accuracy_score, confusion_matrix
 
-# ---- Load Titanic CSV ----
-df = pd.read_csv("Titanic.csv")
+# Load Titanic data
+titanic = pd.read_csv("Titanic.csv")
+print(titanic.head())
 
-# ---- Target y (Survived) ----
-# Make Survived robust
-y_raw = df["Survived"]
-if y_raw.dtype == object:
-    y_raw = y_raw.astype(str).str.strip().str.lower().map({
-        "1": 1, "0": 0,
-        "yes": 1, "no": 0,
-        "true": 1, "false": 0,
-        "survived": 1, "died": 0
-    })
+# Input X and target y
+X = titanic[["Class", "Sex", "Age"]].copy()
+y = titanic["Survived"].copy()
 
-# Drop rows where Survived is missing/unreadable
-valid_mask = y_raw.notna()
-df = df.loc[valid_mask].copy()
-y = y_raw.loc[valid_mask].astype(int).values  # shape (n,)
-
-# ---- Features X: use Class, Sex, Age ----
-use_cols = ["Class", "Sex", "Age"]
-Xdf = df[use_cols].copy()
-
-# Clean Age
-Xdf["Age"] = Xdf["Age"].astype(str).str.strip().str.lower().map({
-    "adult": 0,
-    "child": 1,
-    "0": 0,
-    "1": 1
+# Convert categorical values to numbers
+X["Class"] = X["Class"].replace({
+    "1st": 1,
+    "2nd": 2,
+    "3rd": 3,
+    "Crew": 4
 })
-Xdf["Age"] = Xdf["Age"].fillna(Xdf["Age"].mode()[0]).astype(int)
 
-# Clean Sex
-Xdf["Sex"] = Xdf["Sex"].astype(str).str.strip().str.lower().map({
-    "male": 0, "m": 0,
-    "female": 1, "f": 1
+X["Sex"] = X["Sex"].replace({
+    "Male": 0,
+    "Female": 1
 })
-Xdf["Sex"] = Xdf["Sex"].fillna(Xdf["Sex"].mode()[0]).astype(int)
 
-# Clean Class
-Xdf["Class"] = Xdf["Class"].astype(str).str.strip().str.lower().map({
-    "1st": 1, "first": 1, "1": 1,
-    "2nd": 2, "second": 2, "2": 2,
-    "3rd": 3, "third": 3, "3": 3,
-    "crew": 4, "4": 4
+X["Age"] = X["Age"].replace({
+    "Adult": 0,
+    "Child": 1
 })
-Xdf["Class"] = Xdf["Class"].fillna(Xdf["Class"].mode()[0]).astype(int)
 
-# Convert to numpy float matrix
-X = Xdf.values.astype(float)  # shape (n, d)
+y = y.replace({
+    "No": 0,
+    "Yes": 1
+})
 
-print("Shapes:", X.shape, y.shape)
+print(X.shape)
+print(y.shape)
 
-# ---- Train/Test split ----
+# Split data
 X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.30, random_state=2023, stratify=y
+    X, y, test_size=0.3, random_state=5
 )
 
-# ---- Scale features ----
+# Scale features
 scaler = StandardScaler()
 X_train = scaler.fit_transform(X_train)
 X_test = scaler.transform(X_test)
 
-
-def sigmoid(x):
-    return 1.0 / (1.0 + np.exp(-np.clip(x, -500, 500)))
-
-
-def sigmoid_derivative(a):
-    return a * (1.0 - a)
-
-
-class NeuralNetwork2Nodes:
-    def __init__(self, input_size, learning_rate=0.05, seed=2023):
-        rng = np.random.default_rng(seed)
-        self.learning_rate = learning_rate
-        self.W1 = rng.normal(0, 0.2, size=(input_size, 2))
-        self.b1 = np.zeros((1, 2))
-        self.W2 = rng.normal(0, 0.2, size=(2, 1))
-        self.b2 = np.zeros((1, 1))
-        self.error_history = []
-
-    def forward(self, X):
-        self.z1 = np.dot(X, self.W1) + self.b1
-        self.a1 = sigmoid(self.z1)
-        self.z2 = np.dot(self.a1, self.W2) + self.b2
-        self.a2 = sigmoid(self.z2)
-        return self.a2
-
-    def backward(self, X, y, output):
-        y = y.reshape(-1, 1)
-        m = X.shape[0]
-
-        # Binary cross-entropy gradient with sigmoid output
-        d_output = output - y
-        dW2 = np.dot(self.a1.T, d_output) / m
-        db2 = np.sum(d_output, axis=0, keepdims=True) / m
-
-        d_hidden = np.dot(d_output, self.W2.T) * sigmoid_derivative(self.a1)
-        dW1 = np.dot(X.T, d_hidden) / m
-        db1 = np.sum(d_hidden, axis=0, keepdims=True) / m
-
-        self.W2 -= self.learning_rate * dW2
-        self.b2 -= self.learning_rate * db2
-        self.W1 -= self.learning_rate * dW1
-        self.b1 -= self.learning_rate * db1
-
-    def train(self, X, y, epochs):
-        for epoch in range(epochs):
-            output = self.forward(X)
-            self.backward(X, y, output)
-
-            mse = np.mean((y.reshape(-1, 1) - output) ** 2)
-            self.error_history.append(mse)
-
-            if epoch % 100 == 0:
-                print(f"Epoch {epoch}: error = {mse:.6f}")
-
-    def predict(self, X):
-        probabilities = self.forward(X)
-        return (probabilities >= 0.5).astype(int).flatten()
-
-
-class NeuralNetwork4Nodes:
-    def __init__(self, input_size, learning_rate=0.05, seed=2023):
-        rng = np.random.default_rng(seed)
-        self.learning_rate = learning_rate
-        self.W1 = rng.normal(0, 0.2, size=(input_size, 2))
-        self.b1 = np.zeros((1, 2))
-        self.W2 = rng.normal(0, 0.2, size=(2, 2))
-        self.b2 = np.zeros((1, 2))
-        self.W3 = rng.normal(0, 0.2, size=(2, 1))
-        self.b3 = np.zeros((1, 1))
-        self.error_history = []
-
-    def forward(self, X):
-        self.z1 = np.dot(X, self.W1) + self.b1
-        self.a1 = sigmoid(self.z1)
-
-        self.z2 = np.dot(self.a1, self.W2) + self.b2
-        self.a2 = sigmoid(self.z2)
-
-        self.z3 = np.dot(self.a2, self.W3) + self.b3
-        self.a3 = sigmoid(self.z3)
-        return self.a3
-
-    def backward(self, X, y, output):
-        y = y.reshape(-1, 1)
-        m = X.shape[0]
-
-        d_output = output - y
-        dW3 = np.dot(self.a2.T, d_output) / m
-        db3 = np.sum(d_output, axis=0, keepdims=True) / m
-
-        d_hidden2 = np.dot(d_output, self.W3.T) * sigmoid_derivative(self.a2)
-        dW2 = np.dot(self.a1.T, d_hidden2) / m
-        db2 = np.sum(d_hidden2, axis=0, keepdims=True) / m
-
-        d_hidden1 = np.dot(d_hidden2, self.W2.T) * sigmoid_derivative(self.a1)
-        dW1 = np.dot(X.T, d_hidden1) / m
-        db1 = np.sum(d_hidden1, axis=0, keepdims=True) / m
-
-        self.W3 -= self.learning_rate * dW3
-        self.b3 -= self.learning_rate * db3
-        self.W2 -= self.learning_rate * dW2
-        self.b2 -= self.learning_rate * db2
-        self.W1 -= self.learning_rate * dW1
-        self.b1 -= self.learning_rate * db1
-
-    def train(self, X, y, epochs):
-        for epoch in range(epochs):
-            output = self.forward(X)
-            self.backward(X, y, output)
-
-            mse = np.mean((y.reshape(-1, 1) - output) ** 2)
-            self.error_history.append(mse)
-
-            if epoch % 100 == 0:
-                print(f"Epoch {epoch}: error = {mse:.6f}")
-
-    def predict(self, X):
-        probabilities = self.forward(X)
-        return (probabilities >= 0.5).astype(int).flatten()
-
-
-epochs = 2000
-
-print("\nPart A: 1 hidden layer with 2 nodes")
-nn_2nodes = NeuralNetwork2Nodes(
-    input_size=X_train.shape[1],
-    learning_rate=0.05,
-    seed=2023
+# =========================
+# Part A: 1 hidden layer with 2 nodes
+# =========================
+mlp_a = MLPClassifier(
+    hidden_layer_sizes=(2,),
+    activation="logistic",
+    max_iter=1000,
+    random_state=2022,
+    learning_rate_init=0.01,
+    verbose=True
 )
-nn_2nodes.train(X_train, y_train, epochs)
 
-y_train_pred = nn_2nodes.predict(X_train)
-y_test_pred = nn_2nodes.predict(X_test)
+mlp_a.fit(X_train, y_train)
 
-print("Training Accuracy:", accuracy_score(y_train, y_train_pred))
-print("Test Accuracy:", accuracy_score(y_test, y_test_pred))
+plt.plot(mlp_a.loss_curve_)
+plt.title("Training Error for Part A")
+plt.xlabel("Iteration")
+plt.ylabel("Loss")
+plt.show()
+
+y_train_pred_a = mlp_a.predict(X_train)
+y_test_pred_a = mlp_a.predict(X_test)
+
+print("Part A: 1 hidden layer with 2 nodes")
+print("Training Accuracy:", accuracy_score(y_train, y_train_pred_a))
+print("Test Accuracy:", accuracy_score(y_test, y_test_pred_a))
 print("Training Confusion Matrix:")
-print(confusion_matrix(y_train, y_train_pred))
+print(confusion_matrix(y_train, y_train_pred_a))
 print("Test Confusion Matrix:")
-print(confusion_matrix(y_test, y_test_pred))
+print(confusion_matrix(y_test, y_test_pred_a))
 
-plt.figure(figsize=(8, 5))
-plt.plot(nn_2nodes.error_history, label="2-node NN Error")
-plt.xlabel("Epoch")
-plt.ylabel("Mean Squared Error")
-plt.title("Training Error for 2-Node Neural Network")
-plt.legend()
-plt.grid(True)
+cm_a = confusion_matrix(y_test, y_test_pred_a)
+ConfusionMatrixDisplay(confusion_matrix=cm_a).plot()
+plt.title("Part A Test Confusion Matrix")
+plt.show()
 
-print("\nPart B Bonus: 2 hidden layers with 2 nodes each")
-nn_4nodes = NeuralNetwork4Nodes(
-    input_size=X_train.shape[1],
-    learning_rate=0.05,
-    seed=2023
+# =========================
+# Part B: 2 hidden layers with 2 nodes each
+# =========================
+mlp_b = MLPClassifier(
+    hidden_layer_sizes=(2, 2),
+    activation="logistic",
+    max_iter=1000,
+    random_state=2022,
+    learning_rate_init=0.01,
+    verbose=True
 )
-nn_4nodes.train(X_train, y_train, epochs)
 
-y_train_pred_bonus = nn_4nodes.predict(X_train)
-y_test_pred_bonus = nn_4nodes.predict(X_test)
+mlp_b.fit(X_train, y_train)
 
-print("Training Accuracy:", accuracy_score(y_train, y_train_pred_bonus))
-print("Test Accuracy:", accuracy_score(y_test, y_test_pred_bonus))
+plt.plot(mlp_b.loss_curve_)
+plt.title("Training Error for Part B")
+plt.xlabel("Iteration")
+plt.ylabel("Loss")
+plt.show()
+
+y_train_pred_b = mlp_b.predict(X_train)
+y_test_pred_b = mlp_b.predict(X_test)
+
+print("Part B: 2 hidden layers with 2 nodes each")
+print("Training Accuracy:", accuracy_score(y_train, y_train_pred_b))
+print("Test Accuracy:", accuracy_score(y_test, y_test_pred_b))
 print("Training Confusion Matrix:")
-print(confusion_matrix(y_train, y_train_pred_bonus))
+print(confusion_matrix(y_train, y_train_pred_b))
 print("Test Confusion Matrix:")
-print(confusion_matrix(y_test, y_test_pred_bonus))
+print(confusion_matrix(y_test, y_test_pred_b))
 
-plt.figure(figsize=(8, 5))
-plt.plot(nn_4nodes.error_history, color="orange", label="4-node NN Error")
-plt.xlabel("Epoch")
-plt.ylabel("Mean Squared Error")
-plt.title("Training Error for 4-Node Neural Network")
-plt.legend()
-plt.grid(True)
+cm_b = confusion_matrix(y_test, y_test_pred_b)
+ConfusionMatrixDisplay(confusion_matrix=cm_b).plot()
+plt.title("Part B Test Confusion Matrix")
 plt.show()
 
